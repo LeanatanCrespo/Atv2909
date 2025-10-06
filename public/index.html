@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro de Clientes</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { color: #333; }
+    form { margin-bottom: 20px; }
+    input { margin: 5px; padding: 8px; }
+    button { padding: 8px 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Cadastro de Clientes</h1>
+
+  <form id="formCliente">
+    <input type="text" id="nome" placeholder="Nome" required />
+    <input type="email" id="email" placeholder="Email" required />
+    <button type="submit">Cadastrar</button>
+  </form>
+
+  <h2>Lista de Clientes</h2>
+  <table id="tabelaClientes">
+    <thead>
+      <tr><th>ID</th><th>Nome</th><th>Email</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const API_URL = "http://localhost:3000";
+
+    // Função para carregar clientes
+    async function carregarClientes() {
+      const res = await fetch(API_URL + "/clientes");
+      const clientes = await res.json();
+
+      const tbody = document.querySelector("#tabelaClientes tbody");
+      tbody.innerHTML = "";
+
+      clientes.forEach(c => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${c.id}</td><td>${c.nome}</td><td>${c.email}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Envio do formulário
+    document.getElementById("formCliente").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const nome = document.getElementById("nome").value;
+      const email = document.getElementById("email").value;
+
+      await fetch(API_URL + "/clientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, email })
+      });
+
+      document.getElementById("formCliente").reset();
+      carregarClientes();
+    });
+
+    // Carregar clientes na inicialização
+    carregarClientes();
+  </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+name: nodeCI
+on:
+  push:
+    branches:
+      - main
+      - docker
+  pull_request:
+    branches:
+      - main
+      - docker
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: 1.0.0
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir imagens
+        run: docker compose build
+      - name: Subir serviços
+        run: docker compose up -d db
+      - name: Esperar banco
+        run: |
+          until docker compose exec db pg_isready -U postgres; do
+          echo "Esperando banco..."
+          sleep 2
+          done
+      - name: Rodar migrações
+        run: docker compose run --rm app npm run migrate
+      - name: Rodar testes
+        run: docker compose run --rm app npm test
+        
+       #CD
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Construir e enviar imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/nodeci:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/nodeci:${{ env.VERSION }}
+         
+      # Limpeza
+      - name: Limpar containers
+        if: always()
+        run: docker compose down

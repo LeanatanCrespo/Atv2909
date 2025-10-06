@@ -1,15 +1,13 @@
-const sqlite3 = require("sqlite3").verbose();
+require("dotenv").config();
 
-const db = new sqlite3.Database(":memory:"); // banco em memória (pode mudar para arquivo)
+const { Pool } = require("pg");
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS clientes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL
-    )
-  `);
+const pool = new Pool({
+  user: process.env.DB_USER || "postgres",
+  host: process.env.DB_HOST || "localhost",
+  database: process.env.DB_NAME || "postgres",
+  password: process.env.DB_PASSWORD || "postgres",
+  port: process.env.DB_PORT || 5432,
 });
 
-module.exports = db;
+module.exports = pool;
