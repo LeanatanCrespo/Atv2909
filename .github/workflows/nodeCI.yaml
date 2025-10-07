@@ -12,8 +12,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      VERSION: 1.0.0
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
@@ -36,7 +34,7 @@ jobs:
       - name: Rodar testes
         run: docker compose run --rm app npm test
         
-       #CD
+       
       - name: Login no Docker Hub
         uses: docker/login-action@v3
         with:
@@ -49,10 +47,10 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/nodeci:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/nodeci:${{ env.VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/Atv2909:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/Atv2909:${{ env.VERSION }}
          
-      # Limpeza
+      
       - name: Limpar containers
         if: always()
         run: docker compose down
