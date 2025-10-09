@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("./db");
 
-// Cadastro de cliente
+// Cadastro de cliente :D
 router.post("/clientes", async (req, res) => {
   const { nome, email } = req.body;
   if (!nome || !email) {
