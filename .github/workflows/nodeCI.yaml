@@ -1,56 +1,104 @@
-name: nodeCI
+name: Node.js CI/CD com Docker 🐳
+
 on:
   push:
     branches:
       - main
       - docker
+    tags:
+      - 'v*' # Aciona em tags como v1.0, v2.0
   pull_request:
     branches:
       - main
       - docker
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+    
+    # Define as variáveis de ambiente aqui para que estejam disponíveis
+    # para a etapa de criação do .env
+    env:
+      IMAGE_NAME: Atv2909
+      DOCKER_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      # 1. NOVO PASSO: Cria o arquivo .env a partir dos Segredos (Secrets)
+      - name: Criar arquivo .env para o ambiente de CI
+        run: |
+          echo "DB_HOST=db" >> .env # Usar o nome do serviço (db) do docker-compose
+          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+          echo "DB_PORT=${{ secrets.DB_PORT }}" >> .env
+          # Se o seu Node.js precisar de outras variáveis (ex: PORT, NODE_ENV), adicione aqui!
+
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Construir imagens
-        run: docker compose build
-      - name: Subir serviços
-        run: docker compose up -d db
-      - name: Esperar banco
+      # --- ETAPAS DE TESTE (CONSTRUÇÃO E VALIDAÇÃO) ---
+      
+      # Nota: Subimos os serviços, usando o .env recém-criado
+      - name: Construir e subir serviços para teste
+        # Usamos '--build' para garantir que as imagens locais estejam atualizadas
+        run: docker compose up -d --build db app 
+        
+      - name: Esperar banco (PostgreSQL) - Mais robusto
         run: |
-          until docker compose exec db pg_isready -U postgres; do
-          echo "Esperando banco..."
-          sleep 2
+          for i in $(seq 1 10); do # Tenta por até 20 segundos
+            if docker compose exec db pg_isready -U postgres; then
+              echo "Banco de dados pronto!"
+              exit 0
+            fi
+            echo "Esperando banco... Tentativa $i/10"
+            sleep 2
           done
+          echo "ERRO: O banco de dados não ficou pronto a tempo."
+          exit 1 # Força a falha do workflow se o banco não subir
+
       - name: Rodar migrações
         run: docker compose run --rm app npm run migrate
+
       - name: Rodar testes
         run: docker compose run --rm app npm test
-        
-       
+
+      # --- ETAPAS DE DEPLOY (LOGIN E PUSH) ---
+      
       - name: Login no Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # NOVO PASSO: Extrair metadados para gerar tags dinâmicas e corretas
+      - name: Extrair metadados (tags, labels) para Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REPO }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=tag
+
       - name: Construir e enviar imagem
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/Atv2909:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/Atv2909:${{ env.VERSION }}
+          # Usamos as tags geradas pelo metadata-action
+          tags: ${{ steps.meta.outputs.tags }} 
+          labels: ${{ steps.meta.outputs.labels }}
+          # Otimização: Adiciona cache para builds futuros mais rápidos
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
          
       
+      # ETAPA FINAL: Limpar containers e liberar recursos
       - name: Limpar containers
-        if: always()
+        if: always() # Garante que essa etapa seja executada mesmo que testes falhem
         run: docker compose down
